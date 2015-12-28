@@ -1,3 +1,5 @@
+symmetrize(P::Matrix) = (P+P')/2 #+ 1e-15eye(P) #TODO: Hacky. Square root filter?
+
 function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
 
     n   = length(y)
@@ -19,31 +21,33 @@ function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
 
         ν⁰ = y[d] - dot(Cₜ, x)
 
-        F∞  = dot(Cₜ, P∞ * Cₜ)
-        F   = dot(Cₜ, P * Cₜ) + σϵ²
+        F∞  = dot(Cₜ, P∞*Cₜ)
+        F   = dot(Cₜ, P*Cₜ) + σϵ²
         F¹  = 1/F∞
         F²  = - F¹ * F * F¹
 
         M∞  = P∞ * Cₜ
         M   = P * Cₜ
 
-        K⁰  = M∞ * F¹
+        K⁰  = F∞ == 0 ? M/F : M∞*F¹
         K¹  = M * F¹ + M∞ * F²
 
         L⁰  = I - K⁰ * Cₜ'
         L¹  = -K¹ * Cₜ'
 
         # Calculate loglikelihood contribution
-        ll -= log(F∞)
+        #ll-= F∞ == 0 ? log(F) + ν⁰*ν⁰/F : log(F∞) 
+        ll-= F∞ == 0 ? 0 : log(F∞) 
 
         # Calculate next values
-        x   = x + K⁰ * ν⁰
-        P   = P∞ * L¹' + P * L⁰' + Q
-        P∞  = P∞ * L⁰'
+        x   = x + K⁰*ν⁰
+        P   = F∞ == 0 ? symmetrize(P*L⁰' + Q) : symmetrize(P∞*L¹' + P*L⁰' + Q)
+        P∞  = F∞ == 0 ? P∞        : symmetrize(P∞*L⁰')
 
         diffuseP = findfirst(round(P∞,12)) > 0
 
     end #while
+    #println(d)
 
     for t in d+1:n-1
 
@@ -54,7 +58,7 @@ function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
         Kₜ = P * Cₜ / Fₜ
 
         # Calculate loglikelihood contribution
-        ll -= log(Fₜ) + νₜ*νₜ/Fₜ
+        ll -= Cₜ[1] == 0 ? 0 : log(Fₜ) + νₜ*νₜ/Fₜ
 
         # Predict next values
         x += Kₜ * νₜ
@@ -67,6 +71,7 @@ function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
     Fₜ = dot(Cₜ, P*Cₜ) + σϵ²
     ll -= log(Fₜ) + νₜ*νₜ/Fₜ
 
+    println(ll)
     return -ll/2
 
 end #likelihood 
@@ -86,6 +91,7 @@ function smooth{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, σμ²::T)
     P∞  = Matrix{T}[]
     L⁰  = Matrix{T}[]
     L¹  = Matrix{T}[]
+    F∞  = T[]
     F²  = T[]
 
     x   = Array{T}(nₓ, n)
@@ -111,31 +117,32 @@ function smooth{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, σμ²::T)
         Cₜ = C[:,d]
         ν⁰ = y[d] - dot(Cₜ, xₜ)
 
-        F∞  = dot(Cₜ, P∞ₜ * Cₜ)
-        F   = dot(Cₜ, Pₜ * Cₜ) + σϵ²
-        F¹ₜ = 1/F∞
-        F²ₜ = - F¹ₜ * F * F¹ₜ
+        F∞ₜ = dot(Cₜ, P∞ₜ * Cₜ)
+        Fₜ  = dot(Cₜ, Pₜ * Cₜ) + σϵ²
+        F¹ₜ = 1/F∞ₜ
+        F²ₜ = - F¹ₜ * Fₜ * F¹ₜ
 
         M∞  = P∞ₜ * Cₜ
         M   = Pₜ * Cₜ
 
-        K⁰ = M∞ * F¹ₜ
+        K⁰  = F∞ₜ == 0 ? M/Fₜ : M∞*F¹ₜ
         K¹ = M * F¹ₜ + M∞ * F²ₜ
 
         L⁰ₜ = I - K⁰ * Cₜ'
         L¹ₜ = -K¹ * Cₜ'
 
         ν[d]    = ν⁰
-        F⁻¹[d]  = F¹ₜ
+        F⁻¹[d]  = 1/Fₜ
         K[:, d] = K⁰
+        push!(F∞, F∞ₜ)
         push!(F², F²ₜ)
         push!(L⁰, L⁰ₜ)
         push!(L¹, L¹ₜ)
 
         # Calculate next values
         xₜ  = xₜ + K⁰ * ν⁰
-        Pₜ  = P∞ₜ * L¹ₜ' + Pₜ * L⁰ₜ' + Q
-        P∞ₜ = P∞ₜ * L⁰ₜ'
+        Pₜ  = F∞ₜ == 0 ? Pₜ*L⁰ₜ' + Q : P∞ₜ*L¹ₜ' + Pₜ*L⁰ₜ' + Q
+        P∞ₜ = F∞ₜ == 0 ? P∞ₜ         : P∞ₜ*L⁰ₜ'
 
         x[:,d+1]    = xₜ
         P[:,:,d+1]  = Pₜ
@@ -219,27 +226,29 @@ function smooth{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, σμ²::T)
     for t in d:-1:1
         
         Cₜ        = C[:,t]
-        F¹ₜ       = F⁻¹[t]
+        F∞ₜ       = F∞[t]
+        #F¹ₜ       = F⁻¹[t]
         F²ₜ       = F²[t]
+        F⁻¹ₜ      = F∞ₜ == 0 ? F⁻¹[t] : 0
         ν⁰ₜ       = ν[t]
         K⁰ₜ       = K[:,t]
         L⁰ₜ, L¹ₜ  = L⁰[t], L¹[t]
         Pₜ, P∞ₜ   = P[:,:,t], P∞[t]
 
-        uₜ        = -dot(K⁰ₜ, r⁰ₜ)
-        Dₜ        = dot(K⁰ₜ, N⁰ₜ * K⁰ₜ)
+        uₜ        = F⁻¹ₜ*ν⁰ₜ - dot(K⁰ₜ, r⁰ₜ)
+        Dₜ        = F⁻¹ₜ + dot(K⁰ₜ, N⁰ₜ * K⁰ₜ)
 
         # Calculate smoothed disturbances
         ϵ[t] = σϵ² * uₜ
         η[:, t] = Q * rₜ
 
-        # Calculate helper recursions 
-        r¹ₜ = Cₜ * F¹ₜ * ν⁰ₜ + L⁰ₜ' * r¹ₜ + L¹ₜ' * r⁰ₜ
+        # Calculate helper recursions
+        r¹ₜ = Cₜ*ν⁰ₜ/F∞ₜ + L⁰ₜ'*r¹ₜ + L¹ₜ'*r⁰ₜ
         r⁰ₜ += Cₜ * uₜ
         Δ = L⁰ₜ' * N¹ₜ * L¹ₜ
         N²ₜ = Cₜ*F²ₜ*Cₜ' + L⁰ₜ'*N²ₜ*L⁰ₜ + Δ + Δ' + L¹ₜ'*N⁰ₜ*L¹ₜ 
-        N¹ₜ = Cₜ*F¹ₜ*Cₜ' + L⁰ₜ'*N¹ₜ*L⁰ₜ + L¹ₜ'*N⁰ₜ*L⁰ₜ
-        Θ = Cₜ * K⁰ₜ' * N⁰ₜ
+        N¹ₜ = Cₜ*Cₜ'/F∞ₜ + L⁰ₜ'*N¹ₜ*L⁰ₜ + L¹ₜ'*N⁰ₜ*L⁰ₜ
+        Θ = Cₜ*K⁰ₜ'*N⁰ₜ
         N⁰ₜ += Cₜ*Dₜ*Cₜ' - Θ - Θ'
 
         # Calculate smoothed states

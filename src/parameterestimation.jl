@@ -35,6 +35,7 @@ function fit{T}(y::Vector{T}, X::Matrix{T}=zeros(length(y),0))
 
     params = optimize(ll, [0., 0.]).minimum
 
+    println(exp(params))
     σϵ², σμ² = exp(2params)
     y_residuals, x, Pₓ, x_residuals = smooth(yclean, C, σϵ², σμ²)
 
