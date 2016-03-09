@@ -25,29 +25,30 @@ function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
         F   = dot(Cₜ, P*Cₜ) + σϵ²
         F¹  = 1/F∞
         F²  = - F¹ * F * F¹
+        posdefF∞ = !isapprox(0, F∞, atol=1e-10)
 
         M∞  = P∞ * Cₜ
         M   = P * Cₜ
 
-        K⁰  = F∞ == 0 ? M/F : M∞*F¹
+        K⁰  = posdefF∞ ? M∞*F¹ : M/F
         K¹  = M * F¹ + M∞ * F²
 
         L⁰  = I - K⁰ * Cₜ'
         L¹  = -K¹ * Cₜ'
 
         # Calculate loglikelihood contribution
-        #ll-= F∞ == 0 ? log(F) + ν⁰*ν⁰/F : log(F∞) 
-        ll-= F∞ == 0 ? 0 : log(F∞)
+        ll-= posdefF∞ ? log(F∞) : log(F) + ν⁰*ν⁰/F
 
         # Calculate next values
         x   = x + K⁰*ν⁰
-        P   = F∞ == 0 ? symmetrize(P*L⁰' + Q) : symmetrize(P∞*L¹' + P*L⁰' + Q)
-        P∞  = F∞ == 0 ? P∞ : symmetrize(P∞*L⁰')
+        P   = posdefF∞ ? symmetrize(P∞*L¹' + P*L⁰' + Q) : symmetrize(P*L⁰' + Q)
+        P∞  = posdefF∞ ? symmetrize(P∞*L⁰') : P∞
 
-        diffuseP = findfirst(round(P∞,12)) > 0
+        diffuseP = findfirst(round(P∞,10)) > 0
+
+        d == n && error("Failed to substantiate diffuse initial conditions")
 
     end #while
-    #println(d)
 
     for t in d+1:n-1
 
@@ -71,7 +72,6 @@ function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
     Fₜ = dot(Cₜ, P*Cₜ) + σϵ²
     ll -= log(Fₜ) + νₜ*νₜ/Fₜ
 
-    #println(ll)
     return -ll/2
 
 end #likelihood 

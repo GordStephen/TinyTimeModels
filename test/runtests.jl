@@ -2,16 +2,12 @@ using TinyTimeModels
 using FactCheck
 
 srand(10)
-
-rtol = 0.07
+rtol = 0.05
 
 facts("Parameter estimation") do
 
-    n, m = 1000, 5
-    σ = 1
-    η = .1
-    β = randn(m)
-
+    n, m = 10000, 5
+    σ, η, β = 1, .1, randn(m)
     X = randn(n, m)
 
     context("Local level innovation and model error variances") do
@@ -45,12 +41,12 @@ facts("Parameter estimation") do
             return [X_above X_below]
         end #thresholdify
 
-        β_new = randn(2)
+        β_new = 10randn(6)
         p = 0.1randn(1)
-        X_new = thresholdify(p, X[:,1:1])
+        X_new = thresholdify(p, X[:,1:3])
 
         y = X_new*β_new + cumsum(η*randn(n)) + σ*randn(n)
-        llfit = fit(y, thresholdify, 0.1randn(1), X[:, 1:1])
+        llfit = fit(y, thresholdify, 0.1randn(1), X[:, 1:3])
 
         @fact llfit.regression_coefs --> roughly(β_new, rtol=rtol)
         @fact llfit.transform_params --> roughly(p, rtol=rtol)

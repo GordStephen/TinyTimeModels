@@ -60,14 +60,13 @@ function fit{T}(y::Vector{T}, f::Function, p₀::Vector{T}, X::Matrix{T})
     function ll(params::Vector{T})
         C = [c; f(params[3:end], X)'] .* notmissing'
         Q[1] = exp(2params[2])
-        #println(rank(C), "/", size(C,1))
         return likelihood(yclean, C, exp(2params[1]), Q)
     end #ll
 
     params = optimize(ll, [0.; 0.; p₀]).minimum
 
-    println(exp(params[1:2]))
-    σϵ², σμ², p = exp(2params[1:2]), params[3:end]
+    σϵ², σμ² = exp(2params[1:2])
+    p = params[3:end]
     fX = f(p, X)'
     C = [ones(1, n); fX] .* notmissing'
     y_residuals, x, Pₓ, x_residuals = smooth(yclean, C, σϵ², σμ²)
