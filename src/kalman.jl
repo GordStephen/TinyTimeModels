@@ -37,12 +37,12 @@ function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
 
         # Calculate loglikelihood contribution
         #ll-= F∞ == 0 ? log(F) + ν⁰*ν⁰/F : log(F∞) 
-        ll-= F∞ == 0 ? 0 : log(F∞) 
+        ll-= F∞ == 0 ? 0 : log(F∞)
 
         # Calculate next values
         x   = x + K⁰*ν⁰
         P   = F∞ == 0 ? symmetrize(P*L⁰' + Q) : symmetrize(P∞*L¹' + P*L⁰' + Q)
-        P∞  = F∞ == 0 ? P∞        : symmetrize(P∞*L⁰')
+        P∞  = F∞ == 0 ? P∞ : symmetrize(P∞*L⁰')
 
         diffuseP = findfirst(round(P∞,12)) > 0
 
@@ -71,7 +71,7 @@ function likelihood{T}(y::Vector{T}, C::Matrix{T}, σϵ²::T, Q::Matrix{T})
     Fₜ = dot(Cₜ, P*Cₜ) + σϵ²
     ll -= log(Fₜ) + νₜ*νₜ/Fₜ
 
-    println(ll)
+    #println(ll)
     return -ll/2
 
 end #likelihood 

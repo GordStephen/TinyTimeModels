@@ -2,6 +2,7 @@ immutable LocalLevelFit{T}
     residual_std::T
     locallevel_innovation_std::T
     regression_coefs::Vector{T}
+    transform_params::Vector{T}
     y::Vector{T}
     y_residuals::Vector{T}
     locallevel::Vector{T}
@@ -24,9 +25,9 @@ function fit{T}(y::Vector{T}, X::Matrix{T}=zeros(length(y),0))
 
     nₓ  = 1 + m
     Q = zeros(nₓ, nₓ)
-    C = [ones(1, n); X] .* notmissing' 
+    C = [ones(1, n); X] .* notmissing'
 
-    yclean = y .* notmissing 
+    yclean = y .* notmissing
 
     function ll(params::Vector{T})
         Q[1] = exp(2params[2])
@@ -35,10 +36,42 @@ function fit{T}(y::Vector{T}, X::Matrix{T}=zeros(length(y),0))
 
     params = optimize(ll, [0., 0.]).minimum
 
-    println(exp(params))
+    #println(exp(params))
     σϵ², σμ² = exp(2params)
     y_residuals, x, Pₓ, x_residuals = smooth(yclean, C, σϵ², σμ²)
 
-    return LocalLevelFit(sqrt(σϵ²), sqrt(σμ²), x[2:end,end], y, y_residuals, vec(x[1,:]), vec(Pₓ[1,1,:]), vec(x_residuals[1,:]))
+    return LocalLevelFit(sqrt(σϵ²), sqrt(σμ²), x[2:end,end], zeros(0), y, y_residuals, vec(x[1,:]), vec(Pₓ[1,1,:]), vec(x_residuals[1,:]))
+
+end #fit
+
+function fit{T}(y::Vector{T}, f::Function, p₀::Vector{T}, X::Matrix{T})
+
+    n   = length(y) # Number of observations
+    m   = size(f(p₀, X), 2) # Number of regressors
+    @assert n == size(X, 1)
+
+    notmissing = !isnan(y)
+
+    nₓ  = 1 + m
+    Q = zeros(nₓ, nₓ)
+    yclean = y .* notmissing
+    c = ones(1, n)
+
+    function ll(params::Vector{T})
+        C = [c; f(params[3:end], X)'] .* notmissing'
+        Q[1] = exp(2params[2])
+        #println(rank(C), "/", size(C,1))
+        return likelihood(yclean, C, exp(2params[1]), Q)
+    end #ll
+
+    params = optimize(ll, [0.; 0.; p₀]).minimum
+
+    println(exp(params[1:2]))
+    σϵ², σμ², p = exp(2params[1:2]), params[3:end]
+    fX = f(p, X)'
+    C = [ones(1, n); fX] .* notmissing'
+    y_residuals, x, Pₓ, x_residuals = smooth(yclean, C, σϵ², σμ²)
+
+    return LocalLevelFit(sqrt(σϵ²), sqrt(σμ²), x[2:end,end], p, y, y_residuals, vec(x[1,:]), vec(Pₓ[1,1,:]), vec(x_residuals[1,:]))
 
 end #fit
